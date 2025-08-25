@@ -1,0 +1,48 @@
+{
+  "name": "summarizer-ui",
+  "version": "1.0.0",
+  "description": "This guide provides comprehensive instructions for frontend developers to integrate with the AI Research Paper Summarizer backend API using Next.js, Material-UI (MUI), and Lucide React icons.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n1th1n-19/Summarizer-UI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/n1th1n-19/Summarizer-UI/issues"
+  },
+  "homepage": "https://github.com/n1th1n-19/Summarizer-UI#readme",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.18.0",
+    "@mui/x-data-grid": "^6.20.4",
+    "@mui/x-date-pickers": "^6.20.2",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.11",
+    "@types/react-dom": "^19.1.7",
+    "axios": "^1.11.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.541.0",
+    "next": "^15.5.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "swr": "^2.3.6",
+    "typescript": "^5.9.2",
+    "zod": "^4.1.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.34.0",
+    "eslint-config-next": "^15.5.0"
+  }
+}
