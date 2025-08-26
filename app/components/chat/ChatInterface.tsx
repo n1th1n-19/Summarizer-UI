@@ -74,7 +74,7 @@ export default function ChatInterface() {
     if (!token) return;
 
     try {
-      const response = await fetch('http://localhost:3001/documents', {
+      const response = await fetch('http://localhost:5000/documents', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ export default function ChatInterface() {
 
     try {
       const response = await fetch(
-        `http://localhost:3001/chat/sessions?documentId=${documentId}`,
+        `http://localhost:5000/chat/sessions?documentId=${documentId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -117,7 +117,7 @@ export default function ChatInterface() {
     if (!token || !selectedDocumentId) return;
 
     try {
-      const response = await fetch('http://localhost:3001/chat/sessions', {
+      const response = await fetch('http://localhost:5000/chat/sessions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -145,7 +145,7 @@ export default function ChatInterface() {
 
     try {
       const response = await fetch(
-        `http://localhost:3001/chat/sessions/${sessionId}`,
+        `http://localhost:5000/chat/sessions/${sessionId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -183,7 +183,7 @@ export default function ChatInterface() {
 
     try {
       const response = await fetch(
-        `http://localhost:3001/chat/sessions/${currentSession.id}/messages`,
+        `http://localhost:5000/chat/sessions/${currentSession.id}/messages`,
         {
           method: 'POST',
           headers: {

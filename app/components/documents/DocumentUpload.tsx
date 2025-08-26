@@ -60,7 +60,7 @@ export default function DocumentUpload({ onUploadSuccess }: { onUploadSuccess?: 
     if (title) formData.append('title', title);
 
     try {
-      const response = await fetch('http://localhost:3001/documents/upload', {
+      const response = await fetch('http://localhost:5000/documents/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

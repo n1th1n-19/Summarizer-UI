@@ -42,7 +42,7 @@ export default function DocumentSearch() {
     setResults([]);
 
     try {
-      const response = await fetch('http://localhost:3001/documents/search', {
+      const response = await fetch('http://localhost:5000/documents/search', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

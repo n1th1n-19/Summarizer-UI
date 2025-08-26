@@ -12,29 +12,6 @@ const UserSchema = z.object({
 
 type User = z.infer<typeof UserSchema>;
 
-const LoginSchema = z.object({
-  email: z.string().email('Please provide a valid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
-
-const RegisterSchema = z.object({
-  name: z
-    .string()
-    .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name must not exceed 50 characters')
-    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'),
-  email: z.string().email('Please provide a valid email address'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters long')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/\d/, 'Password must contain at least one number')
-    .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Password must contain at least one special character'),
-});
-
-type LoginCredentials = z.infer<typeof LoginSchema>;
-type RegisterData = z.infer<typeof RegisterSchema>;
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -44,8 +21,6 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<void>;
-  register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
 }
@@ -106,56 +81,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     dispatch({ type: 'SET_LOADING', payload: false });
+
+    // Listen for auth updates from callback
+    const handleAuthUpdate = () => {
+      const newToken = localStorage.getItem('authToken');
+      const newUser = localStorage.getItem('user');
+      
+      if (newToken && newUser) {
+        try {
+          const userData = JSON.parse(newUser);
+          dispatch({
+            type: 'LOGIN_SUCCESS',
+            payload: { token: newToken, user: userData }
+          });
+        } catch {
+          localStorage.clear();
+          dispatch({ type: 'LOGOUT' });
+        }
+      } else {
+        // If either token or user is missing, logout
+        dispatch({ type: 'LOGOUT' });
+      }
+    };
+
+    // Listen for localStorage changes (manual token deletion)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'authToken' || e.key === 'user') {
+        if (!e.newValue) {
+          // Token or user was removed
+          dispatch({ type: 'LOGOUT' });
+        }
+      }
+    };
+
+    window.addEventListener('authUpdate', handleAuthUpdate);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('authUpdate', handleAuthUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
-  const login = async (credentials: LoginCredentials) => {
-    const response = await fetch('http://localhost:3001/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Login failed');
-    }
-
-    const data = await response.json();
-    localStorage.setItem('authToken', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    
-    dispatch({
-      type: 'LOGIN_SUCCESS',
-      payload: data
-    });
-  };
-
-  const register = async (userData: RegisterData) => {
-    const response = await fetch('http://localhost:3001/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Registration failed');
-    }
-
-    const data = await response.json();
-    localStorage.setItem('authToken', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    
-    dispatch({
-      type: 'LOGIN_SUCCESS',
-      payload: data
-    });
-  };
 
   const logout = () => {
+    // Clear localStorage first
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
+    
+    // Update state
     dispatch({ type: 'LOGOUT' });
+    
+    // Trigger auth update event for any listening components
+    window.dispatchEvent(new Event('authUpdate'));
   };
 
   const updateProfile = (data: Partial<User>) => {
@@ -163,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ ...state, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

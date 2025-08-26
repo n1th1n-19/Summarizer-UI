@@ -13,7 +13,7 @@ This guide provides comprehensive instructions for frontend developers to integr
 - **SWR/TanStack Query** - Data fetching and caching
 
 ### Backend Configuration
-- **Base URL**: `http://localhost:3001` (development)
+- **Base URL**: `http://localhost:5000` (development)
 - **Authentication**: JWT Bearer tokens
 - **Content Type**: `application/json` (except file uploads)
 - **CORS**: Configured for `http://localhost:3000`

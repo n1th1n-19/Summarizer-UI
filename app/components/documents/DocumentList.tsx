@@ -55,7 +55,7 @@ export default function DocumentList({ refreshTrigger }: { refreshTrigger?: numb
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:3001/documents?page=${paginationModel.page + 1}&limit=${paginationModel.pageSize}&sortBy=createdAt&sortOrder=desc`,
+        `http://localhost:5000/documents?page=${paginationModel.page + 1}&limit=${paginationModel.pageSize}&sortBy=createdAt&sortOrder=desc`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -83,7 +83,7 @@ export default function DocumentList({ refreshTrigger }: { refreshTrigger?: numb
   const handleSummarize = async (documentId: number) => {
     try {
       const response = await fetch(
-        `http://localhost:3001/documents/${documentId}/summarize`,
+        `http://localhost:5000/documents/${documentId}/summarize`,
         {
           method: 'POST',
           headers: {
@@ -104,7 +104,7 @@ export default function DocumentList({ refreshTrigger }: { refreshTrigger?: numb
   const handleGenerateEmbeddings = async (documentId: number) => {
     try {
       const response = await fetch(
-        `http://localhost:3001/documents/${documentId}/embeddings`,
+        `http://localhost:5000/documents/${documentId}/embeddings`,
         {
           method: 'POST',
           headers: {
@@ -127,7 +127,7 @@ export default function DocumentList({ refreshTrigger }: { refreshTrigger?: numb
 
     try {
       const response = await fetch(
-        `http://localhost:3001/documents/${deleteDialog.document.id}`,
+        `http://localhost:5000/documents/${deleteDialog.document.id}`,
         {
           method: 'DELETE',
           headers: {
