@@ -68,17 +68,13 @@ export default function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return;
-
     setLoading(true);
     setApiError('');
     
     try {
-      await register(formData);
-      router.push('/dashboard');
+      register();
     } catch (error) {
       setApiError(error instanceof Error ? error.message : 'Registration failed');
-    } finally {
       setLoading(false);
     }
   };

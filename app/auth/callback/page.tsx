@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Box, CircularProgress, Alert, Typography } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function AuthCallback() {
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string>('');
@@ -115,4 +115,26 @@ export default function AuthCallback() {
   }
 
   return null;
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+          gap: 2,
+        }}
+      >
+        <CircularProgress />
+        <Typography>Loading...</Typography>
+      </Box>
+    }>
+      <AuthCallbackContent />
+    </Suspense>
+  );
 }

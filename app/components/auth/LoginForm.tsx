@@ -21,7 +21,8 @@ export default function LoginForm() {
     setApiError('');
     
     try {
-      window.location.href = 'http://localhost:5000/auth/google';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      window.location.href = `${apiUrl}/auth/google`;
     } catch (error) {
       setApiError('Failed to redirect to Google authentication');
       setLoading(false);

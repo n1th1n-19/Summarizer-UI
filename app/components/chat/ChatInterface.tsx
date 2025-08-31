@@ -2,25 +2,23 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   TextField,
   Button,
   List,
   ListItem,
   ListItemText,
-  Drawer,
-  AppBar,
-  Toolbar,
-  IconButton,
   Paper,
   Avatar,
-  Chip,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
+  Stack,
+  Divider,
+  IconButton,
+  Fade,
+  Skeleton,
 } from '@mui/material';
 import {
   Send,
@@ -28,8 +26,11 @@ import {
   MessageCircle,
   Bot,
   User,
-  Menu as MenuIcon,
+  FileText,
+  Clock,
+  ChevronDown,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Document {
@@ -59,10 +60,22 @@ export default function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+
+  // Debug messages state
+  useEffect(() => {
+    console.log('Messages state updated:', messages.length, messages);
+  }, [messages]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Deduplicate messages by ID
+  const deduplicateMessages = (messages: Message[]) => {
+    return messages.filter((msg, index, arr) => 
+      arr.findIndex(m => m.id === msg.id) === index
+    );
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -74,7 +87,7 @@ export default function ChatInterface() {
     if (!token) return;
 
     try {
-      const response = await fetch('http://localhost:5000/documents', {
+      const response = await fetch('http://localhost:3001/documents', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -95,7 +108,7 @@ export default function ChatInterface() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/chat/sessions?documentId=${documentId}`,
+        `http://localhost:3001/chat/sessions?documentId=${documentId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -107,7 +120,15 @@ export default function ChatInterface() {
       if (!response.ok) throw new Error('Failed to fetch sessions');
 
       const data = await response.json();
-      setSessions(data.data || []);
+      const fetchedSessions = data.data || [];
+      console.log('Fetched sessions:', fetchedSessions);
+      setSessions(fetchedSessions);
+      
+      // Automatically select the first (most recent) session if available
+      if (fetchedSessions.length > 0) {
+        console.log('Auto-selecting session:', fetchedSessions[0]);
+        setCurrentSession(fetchedSessions[0]);
+      }
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
@@ -117,7 +138,7 @@ export default function ChatInterface() {
     if (!token || !selectedDocumentId) return;
 
     try {
-      const response = await fetch('http://localhost:5000/chat/sessions', {
+      const response = await fetch('http://localhost:3001/chat/sessions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -134,18 +155,17 @@ export default function ChatInterface() {
       const session = await response.json();
       setSessions(prev => [session, ...prev]);
       setCurrentSession(session);
-      setMessages([]);
     } catch (error) {
       console.error('Error creating session:', error);
     }
   };
 
-  const loadSession = async (sessionId: number) => {
+  const loadSessionMessages = async (sessionId: number) => {
     if (!token) return;
 
     try {
       const response = await fetch(
-        `http://localhost:5000/chat/sessions/${sessionId}`,
+        `http://localhost:3001/chat/sessions/${sessionId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -157,10 +177,43 @@ export default function ChatInterface() {
       if (!response.ok) throw new Error('Failed to load session');
 
       const sessionData = await response.json();
-      setCurrentSession(sessionData);
-      setMessages(sessionData.messages || []);
+      console.log('Session data:', sessionData);
+      console.log('Raw messages from session:', sessionData.messages);
+      console.log('Messages array exists?', Array.isArray(sessionData.messages));
+      
+      // Try different possible message paths in the response
+      const rawMessages = sessionData.messages || sessionData.data?.messages || [];
+      console.log('Raw messages to process:', rawMessages);
+      
+      // Transform database messages to UI format
+      const transformedMessages: Message[] = [];
+      rawMessages.forEach((dbMessage: any) => {
+        // Add user message
+        if (dbMessage.message) {
+          transformedMessages.push({
+            id: dbMessage.id * 2, // Ensure unique IDs
+            content: dbMessage.message,
+            role: 'USER',
+            createdAt: dbMessage.createdAt,
+          });
+        }
+        
+        // Add AI response
+        if (dbMessage.response) {
+          transformedMessages.push({
+            id: dbMessage.id * 2 + 1, // Ensure unique IDs
+            content: dbMessage.response,
+            role: 'AI',
+            createdAt: dbMessage.createdAt,
+          });
+        }
+      });
+      
+      const messages = deduplicateMessages(transformedMessages);
+      console.log('Transformed messages:', messages);
+      setMessages(messages);
     } catch (error) {
-      console.error('Error loading session:', error);
+      console.error('Error loading session messages:', error);
     }
   };
 
@@ -179,11 +232,11 @@ export default function ChatInterface() {
       role: 'USER',
       createdAt: new Date().toISOString(),
     };
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => deduplicateMessages([...prev, userMessage]));
 
     try {
       const response = await fetch(
-        `http://localhost:5000/chat/sessions/${currentSession.id}/messages`,
+        `http://localhost:3001/chat/sessions/${currentSession.id}/messages`,
         {
           method: 'POST',
           headers: {
@@ -197,13 +250,33 @@ export default function ChatInterface() {
       if (!response.ok) throw new Error('Failed to send message');
 
       const result = await response.json();
+      console.log('API response result:', result);
+      console.log('userMessage:', result.userMessage);
+      console.log('aiResponse:', result.aiResponse);
+      
+      // Transform the API response to UI format
+      const transformedUserMessage: Message = {
+        id: result.userMessage?.id || Date.now(),
+        content: result.userMessage?.message || result.userMessage?.content,
+        role: 'USER',
+        createdAt: result.userMessage?.createdAt || new Date().toISOString(),
+      };
+      console.log('Transformed user message:', transformedUserMessage);
+      
+      const transformedAIMessage: Message = {
+        id: result.aiResponse?.id || Date.now() + 1,
+        content: result.aiResponse?.response || result.aiResponse?.content,
+        role: 'AI',
+        createdAt: result.aiResponse?.createdAt || new Date().toISOString(),
+      };
+      console.log('Transformed AI message:', transformedAIMessage);
       
       // Replace the temporary user message and add AI response
-      setMessages(prev => [
+      setMessages((prev) => deduplicateMessages([
         ...prev.slice(0, -1),
-        result.userMessage,
-        result.aiResponse
-      ]);
+        transformedUserMessage,
+        transformedAIMessage
+      ]));
     } catch (error) {
       console.error('Error sending message:', error);
       // Remove the temporary message on error
@@ -226,201 +299,453 @@ export default function ChatInterface() {
     }
   }, [selectedDocumentId]);
 
-  const sidebar = (
-    <Box sx={{ width: 300, p: 2 }}>
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Select Document</InputLabel>
-        <Select
-          value={selectedDocumentId || ''}
-          label="Select Document"
-          onChange={(e) => setSelectedDocumentId(e.target.value as number)}
-        >
-          {documents.map((doc) => (
-            <MenuItem key={doc.id} value={doc.id}>
-              {doc.title}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      <Button
-        fullWidth
-        variant="contained"
-        startIcon={<Plus size={20} />}
-        onClick={createSession}
-        disabled={!selectedDocumentId}
-        sx={{ mb: 2 }}
-      >
-        New Chat
-      </Button>
-
-      <Typography variant="h6" gutterBottom>
-        Chat Sessions
-      </Typography>
-
-      <List>
-        {sessions.map((session) => (
-          <ListItem
-            key={session.id}
-            component="div"
-            onClick={() => loadSession(session.id)}
-            sx={{
-              borderRadius: 1,
-              mb: 1,
-              cursor: 'pointer',
-              bgcolor: currentSession?.id === session.id ? 'primary.main' : 'transparent',
-              color: currentSession?.id === session.id ? 'primary.contrastText' : 'inherit',
-              '&:hover': {
-                bgcolor: currentSession?.id === session.id ? 'primary.dark' : 'action.hover',
-              },
-            }}
-          >
-            <ListItemText
-              primary={session.sessionName}
-              secondary={new Date(session.createdAt).toLocaleDateString()}
-            />
-          </ListItem>
-        ))}
-      </List>
-    </Box>
-  );
+  useEffect(() => {
+    console.log('currentSession changed:', currentSession);
+    if (currentSession) {
+      console.log('Loading messages for session:', currentSession.id);
+      loadSessionMessages(currentSession.id);
+    }
+  }, [currentSession]);
 
   return (
-    <Box sx={{ display: 'flex', height: '70vh' }}>
-      {/* Sidebar */}
-      <Drawer
-        variant="persistent"
-        anchor="left"
-        open={sidebarOpen}
-        sx={{
-          '& .MuiDrawer-paper': {
-            position: 'relative',
-            width: 300,
-          },
-        }}
-      >
-        {sidebar}
-      </Drawer>
-
-      {/* Main Chat Area */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <AppBar position="static" color="default" elevation={1}>
-          <Toolbar>
-            <IconButton onClick={() => setSidebarOpen(!sidebarOpen)} edge="start">
-              <MenuIcon />
-            </IconButton>
-            <MessageCircle size={24} style={{ marginLeft: 8, marginRight: 8 }} />
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              {currentSession?.sessionName || 'Select a chat session'}
-            </Typography>
-          </Toolbar>
-        </AppBar>
-
-        {/* Messages */}
-        <Box
-          sx={{
-            flexGrow: 1,
-            overflow: 'auto',
-            p: 2,
-            bgcolor: 'background.default',
-          }}
-        >
-          {messages.map((message) => (
-            <Box
-              key={message.id}
-              sx={{
-                display: 'flex',
-                mb: 2,
-                justifyContent: message.role === 'USER' ? 'flex-end' : 'flex-start',
-              }}
-            >
-              {message.role === 'AI' && (
-                <Avatar sx={{ mr: 1, bgcolor: 'primary.main' }}>
-                  <Bot size={20} />
-                </Avatar>
-              )}
-              
-              <Paper
-                sx={{
-                  p: 2,
-                  maxWidth: '70%',
-                  bgcolor: message.role === 'USER' ? 'primary.main' : 'background.paper',
-                  color: message.role === 'USER' ? 'primary.contrastText' : 'text.primary',
-                }}
-              >
-                <Typography variant="body1">{message.content}</Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    opacity: 0.7,
-                    display: 'block',
-                    mt: 1,
-                  }}
-                >
-                  {new Date(message.createdAt).toLocaleTimeString()}
-                </Typography>
-              </Paper>
-
-              {message.role === 'USER' && (
-                <Avatar sx={{ ml: 1, bgcolor: 'secondary.main' }}>
-                  <User size={20} />
-                </Avatar>
-              )}
-            </Box>
-          ))}
-          
-          {sending && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Avatar sx={{ mr: 1, bgcolor: 'primary.main' }}>
-                <Bot size={20} />
-              </Avatar>
-              <Chip label="AI is typing..." size="small" />
-            </Box>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </Box>
-
-        {/* Message Input */}
-        {currentSession && (
-          <Paper
-            component="form"
-            onSubmit={sendMessage}
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {currentSession ? (
+        <>
+          {/* Messages Area - Claude style centered layout */}
+          <Box
             sx={{
-              p: 2,
-              display: 'flex',
-              alignItems: 'flex-end',
-              gap: 1,
-              borderRadius: 0,
+              flexGrow: 1,
+              overflow: 'auto',
+              backgroundColor: '#ffffff',
             }}
           >
-            <TextField
-              fullWidth
-              multiline
-              maxRows={4}
-              placeholder="Ask a question about this document..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              disabled={sending}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage(e);
-                }
+            <Box
+              sx={{
+                maxWidth: '48rem',
+                mx: 'auto',
+                px: 4,
+                py: 6,
               }}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={!newMessage.trim() || sending}
-              sx={{ minWidth: 56, height: 56 }}
             >
-              <Send size={20} />
+              {messages.length === 0 ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '50vh',
+                    textAlign: 'center',
+                  }}
+                >
+                  <Typography 
+                    variant="h4" 
+                    sx={{ 
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      mb: 2,
+                    }}
+                  >
+                    How can I help you today?
+                  </Typography>
+                  <Typography 
+                    variant="body1" 
+                    sx={{ 
+                      color: '#64748b',
+                      fontSize: '1.125rem',
+                      maxWidth: '32rem',
+                    }}
+                  >
+                    Ask me anything about your document. I can help you understand, analyze, and extract insights.
+                  </Typography>
+                </Box>
+              ) : (
+                <Stack spacing={6}>
+                  {messages.map((message, index) => (
+                    <Box key={index}>
+                      {/* User Message */}
+                      {message.role === 'USER' && (
+                        <Box sx={{ mb: 4 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              mb: 2,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                backgroundColor: '#ab6800',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <User size={14} color="#ffffff" />
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 600,
+                                color: '#0f172a',
+                                fontSize: '0.875rem',
+                              }}
+                            >
+                              You
+                            </Typography>
+                          </Box>
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              color: '#0f172a',
+                              fontSize: '1rem',
+                              lineHeight: 1.75,
+                              whiteSpace: 'pre-wrap',
+                            }}
+                          >
+                            {message.content}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {/* AI Message */}
+                      {message.role === 'AI' && (
+                        <Box>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              mb: 2,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                backgroundColor: '#ab6800',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Bot size={14} color="#ffffff" />
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 600,
+                                color: '#0f172a',
+                                fontSize: '0.875rem',
+                              }}
+                            >
+                              Claude
+                            </Typography>
+                          </Box>
+                          <Box
+                            sx={{
+                              color: '#0f172a',
+                              fontSize: '1rem',
+                              lineHeight: 1.75,
+                              '& p': { margin: '0 0 1rem 0' },
+                              '& p:last-child': { marginBottom: 0 },
+                              '& ul, & ol': { paddingLeft: '1.5rem', margin: '0.5rem 0' },
+                              '& li': { marginBottom: '0.25rem' },
+                              '& strong': { fontWeight: 600 },
+                              '& em': { fontStyle: 'italic' },
+                              '& code': { 
+                                backgroundColor: '#f1f5f9', 
+                                padding: '0.125rem 0.25rem', 
+                                borderRadius: '0.25rem',
+                                fontFamily: 'monospace',
+                                fontSize: '0.875em'
+                              },
+                              '& pre': { 
+                                backgroundColor: '#f1f5f9', 
+                                padding: '1rem', 
+                                borderRadius: '0.5rem',
+                                overflow: 'auto',
+                                margin: '1rem 0'
+                              },
+                              '& h1, & h2, & h3, & h4, & h5, & h6': {
+                                fontWeight: 600,
+                                marginTop: '1.5rem',
+                                marginBottom: '0.5rem'
+                              },
+                              '& blockquote': {
+                                borderLeft: '4px solid #e2e8f0',
+                                paddingLeft: '1rem',
+                                margin: '1rem 0',
+                                fontStyle: 'italic'
+                              }
+                            }}
+                          >
+                            <ReactMarkdown>{message.content}</ReactMarkdown>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  ))}
+                  
+                  {/* Typing indicator */}
+                  {sending && (
+                    <Box>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 2,
+                          mb: 2,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: '50%',
+                            backgroundColor: '#ab6800',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Bot size={14} color="#ffffff" />
+                        </Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 600,
+                            color: '#0f172a',
+                            fontSize: '0.875rem',
+                          }}
+                        >
+                          Claude
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {[0, 1, 2].map((i) => (
+                          <Box
+                            key={i}
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              backgroundColor: '#cbd5e1',
+                              animation: 'pulse 1.4s ease-in-out infinite',
+                              animationDelay: `${i * 0.2}s`,
+                              '@keyframes pulse': {
+                                '0%, 80%, 100%': {
+                                  opacity: 0.3,
+                                },
+                                '40%': {
+                                  opacity: 1,
+                                },
+                              },
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </Stack>
+              )}
+            </Box>
+          </Box>
+
+          {/* Input Area - Claude style */}
+          <Box
+            sx={{
+              borderTop: '1px solid #e2e8f0',
+              backgroundColor: '#ffffff',
+              px: 4,
+              py: 4,
+            }}
+          >
+            <Box sx={{ maxWidth: '48rem', mx: 'auto' }}>
+              <Box
+                component="form"
+                onSubmit={sendMessage}
+                sx={{
+                  position: 'relative',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 2,
+                  backgroundColor: '#ffffff',
+                  '&:focus-within': {
+                    borderColor: '#ab6800',
+                    boxShadow: '0 0 0 3px rgba(171, 104, 0, 0.1)',
+                  },
+                }}
+              >
+                <TextField
+                  fullWidth
+                  multiline
+                  maxRows={8}
+                  placeholder={
+                    selectedDocumentId 
+                      ? "Ask a question about this document..." 
+                      : "Please select a document first to start chatting"
+                  }
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  disabled={sending || !selectedDocumentId}
+                  variant="standard"
+                  InputProps={{
+                    disableUnderline: true,
+                    sx: {
+                      px: 3,
+                      py: 3,
+                      fontSize: '1rem',
+                      lineHeight: 1.5,
+                      '& input': {
+                        fontSize: '1rem',
+                      },
+                    },
+                  }}
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      minHeight: 56,
+                    },
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !sending && selectedDocumentId) {
+                      e.preventDefault();
+                      sendMessage(e);
+                    }
+                  }}
+                />
+                <IconButton
+                  type="submit"
+                  disabled={!newMessage.trim() || sending || !selectedDocumentId}
+                  sx={{
+                    position: 'absolute',
+                    bottom: 12,
+                    right: 12,
+                    backgroundColor: '#ab6800',
+                    color: '#ffffff',
+                    width: 32,
+                    height: 32,
+                    '&:hover': {
+                      backgroundColor: '#92400e',
+                    },
+                    '&:disabled': {
+                      backgroundColor: '#e2e8f0',
+                      color: '#94a3b8',
+                    },
+                  }}
+                >
+                  <Send size={16} />
+                </IconButton>
+              </Box>
+
+              {/* Document Selection */}
+              <Box sx={{ mt: 3 }}>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Select Document</InputLabel>
+                  <Select
+                    value={selectedDocumentId || ''}
+                    label="Select Document"
+                    onChange={(e) => setSelectedDocumentId(e.target.value as number)}
+                  >
+                    {documents.map((doc) => (
+                      <MenuItem key={doc.id} value={doc.id}>
+                        {doc.title}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {selectedDocumentId && (
+                  <Button
+                    variant="text"
+                    startIcon={<Plus size={16} />}
+                    onClick={createSession}
+                    sx={{
+                      ml: 2,
+                      color: '#ab6800',
+                      '&:hover': {
+                        backgroundColor: '#fef3c7',
+                      },
+                    }}
+                  >
+                    New Conversation
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          </Box>
+        </>
+      ) : (
+        <Box
+          sx={{
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            p: 4,
+          }}
+        >
+          <Typography 
+            variant="h3" 
+            sx={{ 
+              fontWeight: 600,
+              color: '#0f172a',
+              mb: 3,
+            }}
+          >
+            Welcome to AI Chat
+          </Typography>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              color: '#64748b',
+              fontSize: '1.125rem',
+              maxWidth: '32rem',
+              mb: 4,
+            }}
+          >
+            Select a document and start a conversation to chat with AI about your content.
+          </Typography>
+          
+          <FormControl sx={{ minWidth: 300, mb: 3 }}>
+            <InputLabel>Select Document</InputLabel>
+            <Select
+              value={selectedDocumentId || ''}
+              label="Select Document"
+              onChange={(e) => setSelectedDocumentId(e.target.value as number)}
+            >
+              {documents.map((doc) => (
+                <MenuItem key={doc.id} value={doc.id}>
+                  {doc.title}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {selectedDocumentId && (
+            <Button
+              variant="contained"
+              startIcon={<Plus size={20} />}
+              onClick={createSession}
+              sx={{
+                backgroundColor: '#ab6800',
+                '&:hover': {
+                  backgroundColor: '#92400e',
+                },
+              }}
+            >
+              Start New Conversation
             </Button>
-          </Paper>
-        )}
-      </Box>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }

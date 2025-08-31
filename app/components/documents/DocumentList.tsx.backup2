@@ -68,7 +68,12 @@ export default function DocumentList({ refreshTrigger }: { refreshTrigger?: numb
       if (!response.ok) throw new Error('Failed to fetch documents');
 
       const data = await response.json();
-      setDocuments(data.data || []);
+      // Deduplicate documents by ID to prevent duplicate key warnings
+      const documents = data.data || [];
+      const uniqueDocuments = documents.filter((doc: Document, index: number, arr: Document[]) => 
+        arr.findIndex((d: Document) => d.id === doc.id) === index
+      );
+      setDocuments(uniqueDocuments);
       setRowCount(data.pagination?.total || 0);
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -384,7 +389,7 @@ export default function DocumentList({ refreshTrigger }: { refreshTrigger?: numb
           <Box>
             {documents.map((document, index) => (
               <Box
-                key={index}
+                key={`doc-${index}-${document.id}-${document.fileName}-${document.createdAt}`}
                 sx={{
                   p: 4,
                   mb: 3,

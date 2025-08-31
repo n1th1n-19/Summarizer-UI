@@ -23,6 +23,7 @@ interface AuthState {
 interface AuthContextType extends AuthState {
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
+  register: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -66,21 +67,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    const user = localStorage.getItem('user');
-    
-    if (token && user) {
-      try {
-        const userData = JSON.parse(user);
-        dispatch({
-          type: 'LOGIN_SUCCESS',
-          payload: { token, user: userData }
-        });
-      } catch {
-        localStorage.clear();
+    const validateTokenAndUser = async () => {
+      const token = localStorage.getItem('authToken');
+      const user = localStorage.getItem('user');
+      
+      if (token && user) {
+        try {
+          const userData = JSON.parse(user);
+          
+          // Validate token with backend
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+          const response = await fetch(`${apiUrl}/auth/verify`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            // Token is valid and user exists in database
+            const validationData = await response.json();
+            dispatch({
+              type: 'LOGIN_SUCCESS',
+              payload: { token, user: validationData.user || userData }
+            });
+          } else {
+            // Token is invalid or user doesn't exist
+            console.log('Invalid token detected, clearing auth data');
+            localStorage.clear();
+            dispatch({ type: 'LOGOUT' });
+          }
+        } catch (error) {
+          console.error('Token validation failed:', error);
+          localStorage.clear();
+          dispatch({ type: 'LOGOUT' });
+        }
       }
-    }
-    dispatch({ type: 'SET_LOADING', payload: false });
+      
+      dispatch({ type: 'SET_LOADING', payload: false });
+    };
+
+    validateTokenAndUser();
 
     // Listen for auth updates from callback
     const handleAuthUpdate = () => {
@@ -140,8 +168,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'UPDATE_PROFILE', payload: data });
   };
 
+  const register = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    window.location.href = `${apiUrl}/auth/google`;
+  };
+
   return (
-    <AuthContext.Provider value={{ ...state, logout, updateProfile }}>
+    <AuthContext.Provider value={{ ...state, logout, updateProfile, register }}>
       {children}
     </AuthContext.Provider>
   );
