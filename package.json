@@ -31,6 +31,7 @@
     "@types/node": "^20.12.7",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
+    "@vercel/analytics": "^1.5.0",
     "axios": "^1.6.8",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.367.0",

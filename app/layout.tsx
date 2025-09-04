@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/react';
 import CustomThemeProvider from './providers/ThemeProvider';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -32,6 +33,7 @@ export default function RootLayout({
             {children}
           </AuthProvider>
         </CustomThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
